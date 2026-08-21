@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>P2E Fishing Arcade Game</title>
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3/dist/phaser.min.js"></script>
+    <style>
+        body { margin: 0; background-color: #000; display: flex; justify-content: center; align-items: center; height: 100vh; }
+    </style>
+</head>
+<body>
+
+<script>
+const config = {
+    type: Phaser.AUTO,
+    width: 800,
+    height: 600,
+    physics: {
+        default: 'arcade',
+        arcade: { debug: false }
+    },
+    scene: { preload: preload, create: create, update: update }
+};
+
+let hook, fishes, cursors, scoreText, rewardText;
+let totalCoins = 0;
+
+const game = new Phaser.Game(config);
+
+function preload() {
+    // Generates graphics procedurally so no external assets are required
+}
+
+function create() {
+    // 1. Water Background & Sky
+    this.add.rectangle(400, 50, 800, 100, 0x87CEEB); // Sky
+    this.add.rectangle(400, 350, 800, 500, 0x1E90FF); // Water
+
+    // 2. Player Hook
+    const hookGraphics = this.make.graphics({x: 0, y: 0, add: false});
+    hookGraphics.fillStyle(0xFFD700, 1);
+    hookGraphics.fillTriangle(0, 0, 15, 30, -15, 30);
+    hookGraphics.generateTexture('hookTexture', 30, 30);
+
+    hook = this.physics.add.sprite(400, 120, 'hookTexture');
+    hook.setCollideWorldBounds(true);
+
+    // 3. Fish Group
+    fishes = this.physics.add.group();
+
+    // Create custom texture for Fish
+    const fishGraphics = this.make.graphics({x: 0, y: 0, add: false});
+    fishGraphics.fillStyle(0xFF4500, 1);
+    fishGraphics.fillEllipse(20, 10, 40, 20);
+    fishGraphics.generateTexture('fishTexture', 40, 20);
+
+    // Spawn 5 initial fishes
+    for (let i = 0; i < 5; i++) {
+        spawnFish(this);
+    }
+
+    // 4. P2E Reward UI
+    scoreText = this.add.text(16, 16, 'Coins Earned: 0 $FISH', { fontSize: '22px', fill: '#FFF', fontWeight: 'bold' });
+    rewardText = this.add.text(16, 45, 'Reward Rate: +10 Coins/Fish', { fontSize: '14px', fill: '#00FF00' });
+
+    // Controls
+    cursors = this.input.keyboard.createCursorKeys();
+
+    // Catching Fish Collision
+    this.physics.add.overlap(hook, fishes, catchFish, null, this);
+}
+
+function update() {
+    // Hook Movement Controls
+    hook.setVelocity(0);
+
+    if (cursors.left.isDown) hook.setVelocityX(-250);
+    else if (cursors.right.isDown) hook.setVelocityX(250);
+
+    if (cursors.down.isDown) hook.setVelocityY(250);
+    else if (cursors.up.isDown && hook.y > 120) hook.setVelocityY(-250);
+
+    // Loop fishes back if they move off-screen
+    fishes.children.iterate((fish) => {
+        if (fish && fish.x > 820) {
+            fish.x = -20;
+            fish.y = Phaser.Math.Between(180, 550);
+        }
+    });
+}
+
+function spawnFish(scene) {
+    let y = Phaser.Math.Between(180, 550);
+    let fish = fishes.create(-20, y, 'fishTexture');
+    fish.setVelocityX(Phaser.Math.Between(80, 200));
+}
+
+function catchFish(hook, fish) {
+    // Reward Logic
+    fish.destroy();
+    totalCoins += 10;
+    scoreText.setText('Coins Earned: ' + totalCoins + ' $FISH');
+
+    // Spawn a new fish to continue loop
+    spawnFish(this);
+}
+</script>
+
+</body>
+</html>
