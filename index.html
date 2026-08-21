@@ -1,111 +1,334 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en"> 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>P2E Fishing Arcade Game</title>
-    <script src="https://cdn.jsdelivr.net/npm/phaser@3/dist/phaser.min.js"></script>
+    <title>LethalOrca 3D - Play & Earn</title>
+    
+    <!-- Solana Web3 SDK & Three.js 3D Engine -->
+    <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    
     <style>
-        body { margin: 0; background-color: #000; display: flex; justify-content: center; align-items: center; height: 100vh; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Inter', sans-serif; background: #020910; height: 100vh; overflow: hidden; color: white; }
+        
+        .container { width: 100%; height: 100vh; position: relative; }
+        
+        /* Top Navigation Bar */
+        .top-bar { position: absolute; top: 0; left: 0; right: 0; padding: 20px; background: rgba(0,0,0,0.6); display: flex; justify-content: space-between; align-items: center; z-index: 100; backdrop-filter: blur(8px); }
+        .top-bar-left { display: flex; gap: 20px; align-items: center; font-size: 18px; font-weight: 700; }
+        .logo-box { width: 40px; height: 40px; border: 2px solid cyan; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: rgba(0,212,255,0.1); font-size: 20px; }
+        
+        .timer { font-size: 22px; font-weight: 700; color: #ffd700; }
+        
+        .wallet-btn { background: linear-gradient(135deg, cyan, #00a8cc); color: black; border: none; padding: 12px 24px; border-radius: 20px; font-weight: 700; cursor: pointer; transition: 0.3s; box-shadow: 0 0 10px rgba(0,212,255,0.4); }
+        .wallet-btn:hover { transform: scale(1.05); }
+        .wallet-btn.connected { background: #00ff88; color: black; }
+        
+        /* Overlay Screens */
+        #startScreen, #endScreen { position: absolute; inset: 0; background: rgba(2,9,16,0.92); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 200; text-align: center; backdrop-filter: blur(10px); }
+        #startScreen h1 { font-size: 48px; margin-bottom: 15px; color: cyan; text-shadow: 0 0 20px rgba(0,255,255,0.5); }
+        #startScreen p { font-size: 18px; margin-bottom: 30px; color: #a5d8ff; max-width: 420px; }
+        
+        .btn-action { background: cyan; color: black; border: none; padding: 15px 40px; font-size: 18px; font-weight: 700; cursor: pointer; border-radius: 12px; box-shadow: 0 0 20px rgba(0,255,255,0.4); transition: 0.3s; }
+        .btn-action:hover { transform: scale(1.05); background: #5eead4; }
+
+        #endScreen { display: none; }
+        #endScreen.show { display: flex; }
+        #endScreen h2 { font-size: 38px; color: #00ff88; margin-bottom: 15px; }
+
+        /* 3D Game Area */
+        #gameArea3D { position: absolute; inset: 0; z-index: 1; }
+        
+        .catch-text { position: absolute; font-size: 28px; font-weight: 800; color: gold; pointer-events: none; transform: translate(-50%, -50%); text-shadow: 0 0 8px black; animation: floatUp 0.8s ease-out forwards; z-index: 10; }
+        @keyframes floatUp { 0% { opacity: 1; transform: translate(-50%, -50%) scale(0.8); } 100% { opacity: 0; transform: translate(-50%, -100px) scale(1.3); } }
+
+        /* Wallet & Rewards Panel */
+        #walletPanel { position: fixed; right: -360px; top: 0; width: 360px; height: 100vh; background: rgba(0,20,40,0.95); border-left: 2px solid cyan; z-index: 150; padding: 25px; transition: right 0.3s; backdrop-filter: blur(10px); }
+        #walletPanel.open { right: 0; }
+        .close-btn { position: absolute; top: 20px; right: 20px; background: none; border: none; color: cyan; font-size: 24px; cursor: pointer; }
+        .panel-title { font-size: 22px; color: cyan; margin-bottom: 15px; font-weight: 700; }
+        .panel-btn { width: 100%; padding: 12px; margin-bottom: 10px; border: none; border-radius: 8px; cursor: pointer; font-weight: 700; font-size: 14px; }
+        .connect-btn { background: cyan; color: black; }
+        .reward-btn { background: linear-gradient(135deg, #ffd700, #ffed4e); color: black; }
+        .reward-btn:disabled { opacity: 0.5; cursor: not-allowed; background: #555; color: #aaa; }
+        .withdraw-btn { background: #00ff88; color: black; font-size: 15px; margin-top: 10px; }
+        .wallet-info { background: rgba(0,212,255,0.1); padding: 12px; border-radius: 8px; margin-bottom: 12px; font-size: 13px; }
+        .info-value { color: cyan; font-family: monospace; word-break: break-all; margin-top: 4px; }
+        #walletConnected { display: none; }
     </style>
 </head>
 <body>
+    <div class="container">
+        <!-- Start Screen Overlay -->
+        <div id="startScreen">
+            <h1>🐋 LethalOrca 3D</h1>
+            <p>Tap on swimming 3D ocean targets to earn $LORCA tokens! Each fish = +20 LORCA.</p>
+            <button class="btn-action" onclick="startGame()">Start 3D Fishing</button>
+        </div>
 
-<script>
-const config = {
-    type: Phaser.AUTO,
-    width: 800,
-    height: 600,
-    physics: {
-        default: 'arcade',
-        arcade: { debug: false }
-    },
-    scene: { preload: preload, create: create, update: update }
-};
+        <!-- End Screen Overlay -->
+        <div id="endScreen">
+            <h2>Time's Up!</h2>
+            <p id="finalScore" style="font-size: 22px; margin-bottom: 20px; color: #e0e0e0;"></p>
+            <button class="btn-action" onclick="startGame()">Play Again</button>
+        </div>
 
-let hook, fishes, cursors, scoreText, rewardText;
-let totalCoins = 0;
+        <!-- Top Navigation Bar -->
+        <div class="top-bar">
+            <div class="top-bar-left">
+                <div class="logo-box">🐋</div>
+                <span><span id="tokenCount">0</span> LORCA</span>
+            </div>
+            <div class="timer" id="timer">20</div>
+            <button class="wallet-btn" id="walletBtn" onclick="togglePanel()">Connect Wallet</button>
+        </div>
 
-const game = new Phaser.Game(config);
+        <!-- 3D Canvas Container -->
+        <div id="gameArea3D"></div>
 
-function preload() {
-    // Generates graphics procedurally so no external assets are required
-}
+        <!-- Right Side Wallet/Rewards Panel -->
+        <div id="walletPanel">
+            <button class="close-btn" onclick="togglePanel()">✕</button>
+            <div class="panel-title">Wallet & Rewards</div>
 
-function create() {
-    // 1. Water Background & Sky
-    this.add.rectangle(400, 50, 800, 100, 0x87CEEB); // Sky
-    this.add.rectangle(400, 350, 800, 500, 0x1E90FF); // Water
+            <div id="walletDisconnected">
+                <p style="font-size: 13px; margin-bottom: 15px; color: #aaa;">Connect Phantom Wallet to claim bonus & withdraw tokens.</p>
+                <button class="panel-btn connect-btn" onclick="connectPhantom()">Connect Phantom</button>
+            </div>
 
-    // 2. Player Hook
-    const hookGraphics = this.make.graphics({x: 0, y: 0, add: false});
-    hookGraphics.fillStyle(0xFFD700, 1);
-    hookGraphics.fillTriangle(0, 0, 15, 30, -15, 30);
-    hookGraphics.generateTexture('hookTexture', 30, 30);
+            <div id="walletConnected">
+                <div class="wallet-info">
+                    <div>WALLET ADDRESS</div>
+                    <div class="info-value" id="walletAddr">—</div>
+                </div>
+                <div class="wallet-info">
+                    <div>BALANCE</div>
+                    <div class="info-value" style="font-size: 18px; color: #00ff88;"><span id="walletBal">0</span> LORCA</div>
+                </div>
+                
+                <div style="background: rgba(255,255,255,0.05); padding: 12px; border-radius: 10px; border: 1px solid rgba(0,255,255,0.2);">
+                    <p style="font-size: 12px; color: cyan; margin-bottom: 8px; font-weight: 700;">🎁 CLAIM REWARDS:</p>
+                    <button class="panel-btn reward-btn" id="claimBtn" onclick="claimReward()">Claim 500 LORCA Bonus</button>
+                </div>
+                
+                <button class="panel-btn withdraw-btn" id="withdrawBtn" onclick="withdraw()">💰 Withdraw LORCA</button>
+            </div>
+        </div>
+    </div>
 
-    hook = this.physics.add.sprite(400, 120, 'hookTexture');
-    hook.setCollideWorldBounds(true);
+    <script>
+        // Game & Web3 State
+        let walletBalance = 0;
+        let roundScore = 0;
+        let timeLeft = 20;
+        let gameOn = false;
+        let walletOk = false;
+        let userAddr = null;
+        let gameTimer = null;
 
-    // 3. Fish Group
-    fishes = this.physics.add.group();
+        // Three.js 3D Variables
+        let scene, camera, renderer, raycaster, mouse;
+        let activeFishes = [];
 
-    // Create custom texture for Fish
-    const fishGraphics = this.make.graphics({x: 0, y: 0, add: false});
-    fishGraphics.fillStyle(0xFF4500, 1);
-    fishGraphics.fillEllipse(20, 10, 40, 20);
-    fishGraphics.generateTexture('fishTexture', 40, 20);
+        function init3DEngine() {
+            const container = document.getElementById('gameArea3D');
+            
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x021329);
+            scene.fog = new THREE.FogExp2(0x021329, 0.02);
 
-    // Spawn 5 initial fishes
-    for (let i = 0; i < 5; i++) {
-        spawnFish(this);
-    }
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 0, 25);
 
-    // 4. P2E Reward UI
-    scoreText = this.add.text(16, 16, 'Coins Earned: 0 $FISH', { fontSize: '22px', fill: '#FFF', fontWeight: 'bold' });
-    rewardText = this.add.text(16, 45, 'Reward Rate: +10 Coins/Fish', { fontSize: '14px', fill: '#00FF00' });
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            container.appendChild(renderer.domElement);
 
-    // Controls
-    cursors = this.input.keyboard.createCursorKeys();
+            const ambientLight = new THREE.AmbientLight(0x00d4ff, 0.8);
+            scene.add(ambientLight);
 
-    // Catching Fish Collision
-    this.physics.add.overlap(hook, fishes, catchFish, null, this);
-}
+            const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
+            dirLight.position.set(0, 20, 10);
+            scene.add(dirLight);
 
-function update() {
-    // Hook Movement Controls
-    hook.setVelocity(0);
+            raycaster = new THREE.Raycaster();
+            mouse = new THREE.Vector2();
 
-    if (cursors.left.isDown) hook.setVelocityX(-250);
-    else if (cursors.right.isDown) hook.setVelocityX(250);
+            window.addEventListener('pointerdown', onPointerDown);
+            window.addEventListener('resize', onWindowResize);
 
-    if (cursors.down.isDown) hook.setVelocityY(250);
-    else if (cursors.up.isDown && hook.y > 120) hook.setVelocityY(-250);
-
-    // Loop fishes back if they move off-screen
-    fishes.children.iterate((fish) => {
-        if (fish && fish.x > 820) {
-            fish.x = -20;
-            fish.y = Phaser.Math.Between(180, 550);
+            animate3D();
         }
-    });
-}
 
-function spawnFish(scene) {
-    let y = Phaser.Math.Between(180, 550);
-    let fish = fishes.create(-20, y, 'fishTexture');
-    fish.setVelocityX(Phaser.Math.Between(80, 200));
-}
+        function create3DFishMesh(isOrca = false) {
+            const fishGroup = new THREE.Group();
 
-function catchFish(hook, fish) {
-    // Reward Logic
-    fish.destroy();
-    totalCoins += 10;
-    scoreText.setText('Coins Earned: ' + totalCoins + ' $FISH');
+            const bodyGeo = isOrca ? new THREE.ConeGeometry(2.5, 7, 16) : new THREE.ConeGeometry(1.2, 3.5, 12);
+            bodyGeo.rotateZ(-Math.PI / 2);
+            const bodyMat = new THREE.MeshPhongMaterial({
+                color: isOrca ? 0x081a2b : (Math.random() > 0.5 ? 0xffaa00 : 0x00e1ff),
+                shininess: 80,
+                flatShading: true
+            });
+            const body = new THREE.Mesh(bodyGeo, bodyMat);
+            fishGroup.add(body);
 
-    // Spawn a new fish to continue loop
-    spawnFish(this);
-}
-</script>
+            const tailGeo = new THREE.ConeGeometry(isOrca ? 1.5 : 0.8, 2, 8);
+            tailGeo.rotateZ(Math.PI / 2);
+            const tail = new THREE.Mesh(tailGeo, bodyMat);
+            tail.position.x = isOrca ? -4 : -2;
+            fishGroup.add(tail);
 
+            fishGroup.userData = {
+                val: isOrca ? 50 : 20,
+                speed: (Math.random() * 0.15 + 0.1) * (Math.random() < 0.5 ? 1 : -1),
+                sway: Math.random() * 100
+            };
+
+            const startX = fishGroup.userData.speed > 0 ? -25 : 25;
+            const startY = (Math.random() - 0.5) * 18;
+            const startZ = (Math.random() - 0.5) * 10;
+            fishGroup.position.set(startX, startY, startZ);
+
+            if (fishGroup.userData.speed < 0) fishGroup.rotation.y = Math.PI;
+
+            scene.add(fishGroup);
+            activeFishes.push(fishGroup);
+        }
+
+        function animate3D() {
+            requestAnimationFrame(animate3D);
+
+            if (gameOn) {
+                if (activeFishes.length < 8) create3DFishMesh(Math.random() < 0.2);
+
+                for (let i = activeFishes.length - 1; i >= 0; i--) {
+                    const f = activeFishes[i];
+                    f.position.x += f.userData.speed;
+                    f.position.y += Math.sin(Date.now() * 0.003 + f.userData.sway) * 0.03;
+
+                    if (Math.abs(f.position.x) > 30) {
+                        scene.remove(f);
+                        activeFishes.splice(i, 1);
+                    }
+                }
+            }
+            renderer.render(scene, camera);
+        }
+
+        function onPointerDown(event) {
+            if (!gameOn) return;
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(scene.children, true);
+
+            if (intersects.length > 0) {
+                let hitObj = intersects[0].object;
+                while (hitObj.parent && hitObj.parent !== scene) hitObj = hitObj.parent;
+
+                if (hitObj.userData && hitObj.userData.val) {
+                    const val = hitObj.userData.val;
+                    roundScore += val;
+                    walletBalance += val;
+                    updateBalanceDisplay();
+
+                    const txt = document.createElement('div');
+                    txt.className = 'catch-text';
+                    txt.textContent = '+' + val;
+                    txt.style.left = event.clientX + 'px';
+                    txt.style.top = event.clientY + 'px';
+                    document.body.appendChild(txt);
+                    setTimeout(() => txt.remove(), 800);
+
+                    scene.remove(hitObj);
+                    const idx = activeFishes.indexOf(hitObj);
+                    if (idx > -1) activeFishes.splice(idx, 1);
+                }
+            }
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function startGame() {
+            document.getElementById('startScreen').style.display = 'none';
+            document.getElementById('endScreen').classList.remove('show');
+            
+            activeFishes.forEach(f => scene.remove(f));
+            activeFishes = [];
+
+            roundScore = 0;
+            timeLeft = 20;
+            updateBalanceDisplay();
+            document.getElementById('timer').textContent = '20';
+            gameOn = true;
+
+            gameTimer = setInterval(() => {
+                timeLeft--;
+                document.getElementById('timer').textContent = timeLeft;
+                if (timeLeft <= 0) endGame();
+            }, 1000);
+        }
+
+        function endGame() {
+            gameOn = false;
+            clearInterval(gameTimer);
+            document.getElementById('finalScore').textContent = 'You earned ' + roundScore + ' LORCA in this 3D round!';
+            document.getElementById('endScreen').classList.add('show');
+        }
+
+        function updateBalanceDisplay() {
+            document.getElementById('tokenCount').textContent = walletBalance.toLocaleString();
+            document.getElementById('walletBal').textContent = walletBalance.toLocaleString();
+        }
+
+        function togglePanel() {
+            document.getElementById('walletPanel').classList.toggle('open');
+        }
+
+        async function connectPhantom() {
+            try {
+                const provider = window.phantom?.solana || window.solana;
+                if (!provider || !provider.isPhantom) { alert('Please install Phantom Wallet'); return; }
+                const res = await provider.connect();
+                userAddr = res.publicKey.toString();
+                document.getElementById('walletDisconnected').style.display = 'none';
+                document.getElementById('walletConnected').style.display = 'block';
+                document.getElementById('walletAddr').textContent = userAddr.slice(0, 8) + '...' + userAddr.slice(-8);
+                document.getElementById('walletBtn').classList.add('connected');
+                document.getElementById('walletBtn').textContent = '✓ Connected';
+                walletOk = true;
+            } catch (e) { alert('Error: ' + e.message); }
+        }
+
+        function claimReward() {
+            if (!walletOk) return alert('Connect Phantom Wallet first');
+            walletBalance += 500;
+            updateBalanceDisplay();
+            alert('🎉 Claimed 500 LORCA Bonus!');
+            document.getElementById('claimBtn').disabled = true;
+        }
+
+        function withdraw() {
+            if (!walletOk) return alert('Connect Phantom Wallet first');
+            if (walletBalance === 0) return alert('No tokens available to withdraw');
+            alert(`Withdrawal request submitted for ${walletBalance} LORCA to ${userAddr.slice(0,8)}...`);
+            walletBalance = 0;
+            updateBalanceDisplay();
+        }
+
+        window.onload = init3DEngine;
+    </script>
 </body>
 </html>
