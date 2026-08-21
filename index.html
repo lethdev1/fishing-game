@@ -3,11 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LethalOrca 3D - Play & Earn</title>
+    <title>LethalOrca 3D - Babylon.js Engine</title>
     
-    <!-- Solana Web3 SDK & Three.js 3D Engine -->
+    <!-- Solana Web3 SDK & Babylon.js Engine CDNs -->
     <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.babylonjs.com/babylon.js"></script>
+    <script src="https://cdn.babylonjs.com/loaders/babylonjs.loaders.min.js"></script>
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
@@ -29,7 +30,7 @@
         .wallet-btn:hover { transform: scale(1.05); }
         .wallet-btn.connected { background: #00ff88; color: black; }
         
-        /* Overlay Screens */
+        /* Start & End Screens */
         #startScreen, #endScreen { position: absolute; inset: 0; background: rgba(2,9,16,0.92); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 200; text-align: center; backdrop-filter: blur(10px); }
         #startScreen h1 { font-size: 48px; margin-bottom: 15px; color: cyan; text-shadow: 0 0 20px rgba(0,255,255,0.5); }
         #startScreen p { font-size: 18px; margin-bottom: 30px; color: #a5d8ff; max-width: 420px; }
@@ -41,13 +42,13 @@
         #endScreen.show { display: flex; }
         #endScreen h2 { font-size: 38px; color: #00ff88; margin-bottom: 15px; }
 
-        /* 3D Game Area */
-        #gameArea3D { position: absolute; inset: 0; z-index: 1; }
+        /* Babylon.js 3D Canvas */
+        #renderCanvas { width: 100%; height: 100%; touch-action: none; position: absolute; inset: 0; z-index: 1; outline: none; }
         
         .catch-text { position: absolute; font-size: 28px; font-weight: 800; color: gold; pointer-events: none; transform: translate(-50%, -50%); text-shadow: 0 0 8px black; animation: floatUp 0.8s ease-out forwards; z-index: 10; }
         @keyframes floatUp { 0% { opacity: 1; transform: translate(-50%, -50%) scale(0.8); } 100% { opacity: 0; transform: translate(-50%, -100px) scale(1.3); } }
 
-        /* Wallet & Rewards Panel */
+        /* Wallet Panel */
         #walletPanel { position: fixed; right: -360px; top: 0; width: 360px; height: 100vh; background: rgba(0,20,40,0.95); border-left: 2px solid cyan; z-index: 150; padding: 25px; transition: right 0.3s; backdrop-filter: blur(10px); }
         #walletPanel.open { right: 0; }
         .close-btn { position: absolute; top: 20px; right: 20px; background: none; border: none; color: cyan; font-size: 24px; cursor: pointer; }
@@ -64,21 +65,21 @@
 </head>
 <body>
     <div class="container">
-        <!-- Start Screen Overlay -->
+        <!-- Start Screen -->
         <div id="startScreen">
             <h1>🐋 LethalOrca 3D</h1>
-            <p>Tap on swimming 3D ocean targets to earn $LORCA tokens! Each fish = +20 LORCA.</p>
-            <button class="btn-action" onclick="startGame()">Start 3D Fishing</button>
+            <p>Powered by Babylon.js Engine! Click 3D targets to catch fish & earn $LORCA tokens.</p>
+            <button class="btn-action" onclick="startGame()">Start 3D Game</button>
         </div>
 
-        <!-- End Screen Overlay -->
+        <!-- End Screen -->
         <div id="endScreen">
             <h2>Time's Up!</h2>
             <p id="finalScore" style="font-size: 22px; margin-bottom: 20px; color: #e0e0e0;"></p>
             <button class="btn-action" onclick="startGame()">Play Again</button>
         </div>
 
-        <!-- Top Navigation Bar -->
+        <!-- Top Bar -->
         <div class="top-bar">
             <div class="top-bar-left">
                 <div class="logo-box">🐋</div>
@@ -88,16 +89,16 @@
             <button class="wallet-btn" id="walletBtn" onclick="togglePanel()">Connect Wallet</button>
         </div>
 
-        <!-- 3D Canvas Container -->
-        <div id="gameArea3D"></div>
+        <!-- Babylon.js Canvas -->
+        <canvas id="renderCanvas"></canvas>
 
-        <!-- Right Side Wallet/Rewards Panel -->
+        <!-- Wallet Panel -->
         <div id="walletPanel">
             <button class="close-btn" onclick="togglePanel()">✕</button>
             <div class="panel-title">Wallet & Rewards</div>
 
             <div id="walletDisconnected">
-                <p style="font-size: 13px; margin-bottom: 15px; color: #aaa;">Connect Phantom Wallet to claim bonus & withdraw tokens.</p>
+                <p style="font-size: 13px; margin-bottom: 15px; color: #aaa;">Connect Phantom Wallet to claim rewards & withdraw.</p>
                 <button class="panel-btn connect-btn" onclick="connectPhantom()">Connect Phantom</button>
             </div>
 
@@ -122,7 +123,7 @@
     </div>
 
     <script>
-        // Game & Web3 State
+        // Game State Variables
         let walletBalance = 0;
         let roundScore = 0;
         let timeLeft = 20;
@@ -131,141 +132,122 @@
         let userAddr = null;
         let gameTimer = null;
 
-        // Three.js 3D Variables
-        let scene, camera, renderer, raycaster, mouse;
+        // Babylon.js Variables
+        let canvas, engine, scene, camera;
         let activeFishes = [];
 
-        function init3DEngine() {
-            const container = document.getElementById('gameArea3D');
-            
-            scene = new THREE.Scene();
-            scene.background = new THREE.Color(0x021329);
-            scene.fog = new THREE.FogExp2(0x021329, 0.02);
+        function initBabylonEngine() {
+            canvas = document.getElementById("renderCanvas");
+            engine = new BABYLON.Engine(canvas, true);
 
-            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
-            camera.position.set(0, 0, 25);
+            scene = new BABYLON.Scene(engine);
+            scene.clearColor = new BABYLON.Color4(0.01, 0.07, 0.16, 1);
 
-            renderer = new THREE.WebGLRenderer({ antialias: true });
-            renderer.setSize(window.innerWidth, window.innerHeight);
-            renderer.setPixelRatio(window.devicePixelRatio);
-            container.appendChild(renderer.domElement);
+            // Underwater Fog
+            scene.fogMode = BABYLON.Scene.FOGMODE_EXP2;
+            scene.fogColor = new BABYLON.Color3(0.01, 0.07, 0.16);
+            scene.fogDensity = 0.02;
 
-            const ambientLight = new THREE.AmbientLight(0x00d4ff, 0.8);
-            scene.add(ambientLight);
+            // Camera & Lighting
+            camera = new BABYLON.FreeCamera("camera1", new BABYLON.Vector3(0, 0, -25), scene);
+            camera.setTarget(BABYLON.Vector3.Zero());
 
-            const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
-            dirLight.position.set(0, 20, 10);
-            scene.add(dirLight);
+            const light = new BABYLON.HemisphericLight("light1", new BABYLON.Vector3(0, 1, 0), scene);
+            light.intensity = 0.9;
+            light.diffuse = new BABYLON.Color3(0, 0.8, 1);
 
-            raycaster = new THREE.Raycaster();
-            mouse = new THREE.Vector2();
+            // Pointer Event for Catching 3D Objects
+            scene.onPointerDown = function (evt, pickResult) {
+                if (!gameOn) return;
+                if (pickResult.hit && pickResult.pickedMesh && pickResult.pickedMesh.userData) {
+                    const mesh = pickResult.pickedMesh;
+                    catch3DFish(mesh, evt.clientX, evt.clientY);
+                }
+            };
 
-            window.addEventListener('pointerdown', onPointerDown);
-            window.addEventListener('resize', onWindowResize);
+            engine.runRenderLoop(function () {
+                if (gameOn) {
+                    if (activeFishes.length < 8) spawnBabylonFish(Math.random() < 0.2);
 
-            animate3D();
+                    for (let i = activeFishes.length - 1; i >= 0; i--) {
+                        let f = activeFishes[i];
+                        f.position.x += f.userData.speed;
+                        f.position.y += Math.sin(Date.now() * 0.003 + f.userData.sway) * 0.03;
+
+                        if (Math.abs(f.position.x) > 30) {
+                            f.dispose();
+                            activeFishes.splice(i, 1);
+                        }
+                    }
+                }
+                scene.render();
+            });
+
+            window.addEventListener("resize", function () {
+                engine.resize();
+            });
         }
 
-        function create3DFishMesh(isOrca = false) {
-            const fishGroup = new THREE.Group();
+        function spawnBabylonFish(isOrca = false) {
+            const meshName = isOrca ? "orca" : "fish";
+            let mesh;
 
-            const bodyGeo = isOrca ? new THREE.ConeGeometry(2.5, 7, 16) : new THREE.ConeGeometry(1.2, 3.5, 12);
-            bodyGeo.rotateZ(-Math.PI / 2);
-            const bodyMat = new THREE.MeshPhongMaterial({
-                color: isOrca ? 0x081a2b : (Math.random() > 0.5 ? 0xffaa00 : 0x00e1ff),
-                shininess: 80,
-                flatShading: true
-            });
-            const body = new THREE.Mesh(bodyGeo, bodyMat);
-            fishGroup.add(body);
+            if (isOrca) {
+                mesh = BABYLON.MeshBuilder.CreateCone(meshName, { diameter: 3, height: 7, tessellation: 16 }, scene);
+            } else {
+                mesh = BABYLON.MeshBuilder.CreateCone(meshName, { diameter: 1.5, height: 4, tessellation: 12 }, scene);
+            }
 
-            const tailGeo = new THREE.ConeGeometry(isOrca ? 1.5 : 0.8, 2, 8);
-            tailGeo.rotateZ(Math.PI / 2);
-            const tail = new THREE.Mesh(tailGeo, bodyMat);
-            tail.position.x = isOrca ? -4 : -2;
-            fishGroup.add(tail);
+            mesh.rotation.z = Math.PI / 2;
 
-            fishGroup.userData = {
+            const mat = new BABYLON.StandardMaterial("fishMat", scene);
+            mat.diffuseColor = isOrca ? new BABYLON.Color3(0.03, 0.1, 0.2) : (Math.random() > 0.5 ? new BABYLON.Color3(1, 0.6, 0) : new BABYLON.Color3(0, 0.9, 1));
+            mat.specularColor = new BABYLON.Color3(0.5, 0.5, 0.5);
+            mesh.material = mat;
+
+            const speed = (Math.random() * 0.15 + 0.1) * (Math.random() < 0.5 ? 1 : -1);
+            mesh.userData = {
                 val: isOrca ? 50 : 20,
-                speed: (Math.random() * 0.15 + 0.1) * (Math.random() < 0.5 ? 1 : -1),
+                speed: speed,
                 sway: Math.random() * 100
             };
 
-            const startX = fishGroup.userData.speed > 0 ? -25 : 25;
+            const startX = speed > 0 ? -25 : 25;
             const startY = (Math.random() - 0.5) * 18;
             const startZ = (Math.random() - 0.5) * 10;
-            fishGroup.position.set(startX, startY, startZ);
+            mesh.position = new BABYLON.Vector3(startX, startY, startZ);
 
-            if (fishGroup.userData.speed < 0) fishGroup.rotation.y = Math.PI;
+            if (speed < 0) mesh.rotation.y = Math.PI;
 
-            scene.add(fishGroup);
-            activeFishes.push(fishGroup);
+            activeFishes.push(mesh);
         }
 
-        function animate3D() {
-            requestAnimationFrame(animate3D);
+        function catch3DFish(mesh, x, y) {
+            const val = mesh.userData.val;
+            roundScore += val;
+            walletBalance += val;
+            updateBalanceDisplay();
 
-            if (gameOn) {
-                if (activeFishes.length < 8) create3DFishMesh(Math.random() < 0.2);
+            // Catch UI Effect
+            const txt = document.createElement('div');
+            txt.className = 'catch-text';
+            txt.textContent = '+' + val;
+            txt.style.left = x + 'px';
+            txt.style.top = y + 'px';
+            document.body.appendChild(txt);
+            setTimeout(() => txt.remove(), 800);
 
-                for (let i = activeFishes.length - 1; i >= 0; i--) {
-                    const f = activeFishes[i];
-                    f.position.x += f.userData.speed;
-                    f.position.y += Math.sin(Date.now() * 0.003 + f.userData.sway) * 0.03;
-
-                    if (Math.abs(f.position.x) > 30) {
-                        scene.remove(f);
-                        activeFishes.splice(i, 1);
-                    }
-                }
-            }
-            renderer.render(scene, camera);
-        }
-
-        function onPointerDown(event) {
-            if (!gameOn) return;
-            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
-
-            raycaster.setFromCamera(mouse, camera);
-            const intersects = raycaster.intersectObjects(scene.children, true);
-
-            if (intersects.length > 0) {
-                let hitObj = intersects[0].object;
-                while (hitObj.parent && hitObj.parent !== scene) hitObj = hitObj.parent;
-
-                if (hitObj.userData && hitObj.userData.val) {
-                    const val = hitObj.userData.val;
-                    roundScore += val;
-                    walletBalance += val;
-                    updateBalanceDisplay();
-
-                    const txt = document.createElement('div');
-                    txt.className = 'catch-text';
-                    txt.textContent = '+' + val;
-                    txt.style.left = event.clientX + 'px';
-                    txt.style.top = event.clientY + 'px';
-                    document.body.appendChild(txt);
-                    setTimeout(() => txt.remove(), 800);
-
-                    scene.remove(hitObj);
-                    const idx = activeFishes.indexOf(hitObj);
-                    if (idx > -1) activeFishes.splice(idx, 1);
-                }
-            }
-        }
-
-        function onWindowResize() {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
+            // Remove mesh from scene
+            const idx = activeFishes.indexOf(mesh);
+            if (idx > -1) activeFishes.splice(idx, 1);
+            mesh.dispose();
         }
 
         function startGame() {
             document.getElementById('startScreen').style.display = 'none';
             document.getElementById('endScreen').classList.remove('show');
             
-            activeFishes.forEach(f => scene.remove(f));
+            activeFishes.forEach(f => f.dispose());
             activeFishes = [];
 
             roundScore = 0;
@@ -284,7 +266,7 @@
         function endGame() {
             gameOn = false;
             clearInterval(gameTimer);
-            document.getElementById('finalScore').textContent = 'You earned ' + roundScore + ' LORCA in this 3D round!';
+            document.getElementById('finalScore').textContent = 'You earned ' + roundScore + ' LORCA in this Babylon.js round!';
             document.getElementById('endScreen').classList.add('show');
         }
 
@@ -328,7 +310,7 @@
             updateBalanceDisplay();
         }
 
-        window.onload = init3DEngine;
+        window.onload = initBabylonEngine;
     </script>
 </body>
 </html>
